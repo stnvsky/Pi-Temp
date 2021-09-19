@@ -22,10 +22,9 @@
     <div class="container">
       <div class="row">
         <div class="two-third column" style="margin-top: 5%">
-            <h2>Real time conditions</h2>
-            <h1>Temperature: {{"{0:0.1f}".format(temp) }}°F</h1>
-            <h1>Humidity: {{"{0:0.1f}".format(hum)}}%</h1>  
-            <p>This page refreshes every 10 seconds</p>
+            <h1>Temperature:&nbsp&nbsp {{"{0:0.1f}".format(temp) }} °C</h1>
+            <h1>Humidity:&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp {{"{0:0.1f}".format(humid)}} %Rh</h1>
+            <h1>Pressure:&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp {{"{0:0.0f}".format(press)}} hPa</h1> 
         </div>   
       </div>
       <div class="row">
@@ -33,7 +32,7 @@
         <form id="range_select" action = "/lab_env_db" method="GET">  
           <input type="hidden" class="timezone" name="timezone" />      
 	<div class="one column">
-          <a href="/lab_env_db" style="position:relative;top:15px">Historic</a>
+          <a href="/lab_env_db" style="position:relative;top:60px;left:-40px"><button type="button">Historical data</button></a>
        	</div>
         </form>          
       </div>

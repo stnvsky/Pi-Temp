@@ -53,19 +53,17 @@ app = Flask(__name__)
 app.debug = True # Make this False if you are no longer debugging
 
 @app.route("/")
-def hello():
-    return "Hello World!"
-
-@app.route("/lab_temp")
 def lab_temp():
 	import sys
-	import Adafruit_DHT
-	humidity, temperature = Adafruit_DHT.read_retry(Adafruit_DHT.AM2302, 17)
-	temperature = temperature * 9/5.0 + 32
-	if humidity is not None and temperature is not None:
-		return render_template("lab_temp.html",temp=temperature,hum=humidity)
-	else:
-		return render_template("no_sensor.html")
+        import bme280
+        import smbus2
+        port = 1
+        address = 0x76
+        bus = smbus2.SMBus(port)
+        calibration_params = bme280.load_calibration_params(bus, address)
+        data = bme280.sample(bus, address, calibration_params)
+	return render_template("lab_temp.html",temp=data.temperature,humid=data.humidity,press=data.pressure)
+
 
 @app.route("/lab_env_db", methods=['GET'])  #Add date limits in the URL #Arguments: from=2015-03-04&to=2015-03-05
 def lab_env_db():
@@ -135,7 +133,7 @@ def get_records():
 		from_date_utc   = arrow.get(from_date_obj, timezone).to('Etc/UTC').strftime("%Y-%m-%d %H:%M")	
 		to_date_utc     = arrow.get(to_date_obj, timezone).to('Etc/UTC').strftime("%Y-%m-%d %H:%M")
 
-	conn 			    = sqlite3.connect('/var/www/lab_app/lab_app.db')
+	conn 			    = sqlite3.connect('/home/pi/lab_app.db')
 	curs 			    = conn.cursor()
 	curs.execute("SELECT * FROM temperatures WHERE rDateTime BETWEEN ? AND ?", (from_date_utc.format('YYYY-MM-DD HH:mm'), to_date_utc.format('YYYY-MM-DD HH:mm')))
 	temperatures 	    = curs.fetchall()
@@ -190,7 +188,7 @@ def to_plotly():
 				        autorange=True
 				    ),
 				    yaxis=YAxis(
-				    	title='Fahrenheit',
+				    	title='Celsius',
 				        type='linear',
 				        autorange=True
 				    ),
@@ -216,4 +214,4 @@ def validate_date(d):
         return False
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=80)
