@@ -43,54 +43,64 @@ The user can explore historical data to Plotly for visualisation and processing.
 --
  // 10. END
 '''
-
+import sys
 from flask import Flask, request, render_template
 import time
 import datetime
 import arrow
 
+def log(obj):
+	print(obj)
+	sys.stdout.flush()
+
 app = Flask(__name__)
 app.debug = True # Make this False if you are no longer debugging
+
 
 @app.route("/")
 def lab_temp():
 	import sys
-        import bme280
-        import smbus2
-        port = 1
-        address = 0x76
-        bus = smbus2.SMBus(port)
-        calibration_params = bme280.load_calibration_params(bus, address)
-        data = bme280.sample(bus, address, calibration_params)
+	import bme280
+	import smbus2
+
+	port = 1
+	address = 0x76
+	bus = smbus2.SMBus(port)
+	calibration_params = bme280.load_calibration_params(bus, address)
+	data = bme280.sample(bus, address, calibration_params)
+
 	return render_template("lab_temp.html",temp=data.temperature,humid=data.humidity,press=data.pressure)
 
 
 @app.route("/lab_env_db", methods=['GET'])  #Add date limits in the URL #Arguments: from=2015-03-04&to=2015-03-05
 def lab_env_db():
-	temperatures, humidities, timezone, from_date_str, to_date_str = get_records()
+	temperature, humidity, timezone, from_date_str, to_date_str = get_records()
+
+	log(temperature)
 
 	# Create new record tables so that datetimes are adjusted back to the user browser's time zone.
-	time_adjusted_temperatures = []
-	time_adjusted_humidities   = []
-	for record in temperatures:
-		local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm").to(timezone)
-		time_adjusted_temperatures.append([local_timedate.format('YYYY-MM-DD HH:mm'), round(record[2],2)])
+	time_adjusted_temperature = []
+	time_adjusted_humidity   = []
 
-	for record in humidities:
-		local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm").to(timezone)
-		time_adjusted_humidities.append([local_timedate.format('YYYY-MM-DD HH:mm'), round(record[2],2)])
+	for record in temperature:
+		local_timedate = arrow.get(record[1], "YYYY-MM-DD HH:mm:ss").to(timezone)
+		time_adjusted_temperature.append([local_timedate.format('YYYY-MM-DD HH:mm:ss'), round(record[2],2)])
+
+	for record in humidity:
+		local_timedate = arrow.get(record[1], "YYYY-MM-DD HH:mm:ss").to(timezone)
+		time_adjusted_humidity.append([local_timedate.format('YYYY-MM-DD HH:mm:ss'), round(record[2],2)])
 
 	print "rendering lab_env_db.html with: %s, %s, %s" % (timezone, from_date_str, to_date_str)
 
 	return render_template("lab_env_db.html",	timezone		= timezone,
-												temp 			= time_adjusted_temperatures,
-												hum 			= time_adjusted_humidities, 
+												temp 			= time_adjusted_temperature,
+												hum 			= time_adjusted_humidity, 
 												from_date 		= from_date_str, 
 												to_date 		= to_date_str,
-												temp_items 		= len(temperatures),
+												temp_items 		= len(temperature),
 												query_string	= request.query_string, #This query string is used
 																						#by the Plotly link
-												hum_items 		= len(humidities))
+												hum_items 		= len(humidity))
 
 def get_records():
 	import sqlite3
@@ -133,37 +143,40 @@ def get_records():
 		from_date_utc   = arrow.get(from_date_obj, timezone).to('Etc/UTC').strftime("%Y-%m-%d %H:%M")	
 		to_date_utc     = arrow.get(to_date_obj, timezone).to('Etc/UTC').strftime("%Y-%m-%d %H:%M")
 
-	conn 			    = sqlite3.connect('/home/pi/lab_app.db')
+	conn 			    = sqlite3.connect('/home/pi/Pi-Temp/bme280_data.db')
 	curs 			    = conn.cursor()
-	curs.execute("SELECT * FROM temperatures WHERE rDateTime BETWEEN ? AND ?", (from_date_utc.format('YYYY-MM-DD HH:mm'), to_date_utc.format('YYYY-MM-DD HH:mm')))
-	temperatures 	    = curs.fetchall()
-	curs.execute("SELECT * FROM humidities WHERE rDateTime BETWEEN ? AND ?", (from_date_utc.format('YYYY-MM-DD HH:mm'), to_date_utc.format('YYYY-MM-DD HH:mm')))
-	humidities 		    = curs.fetchall()
+	curs.execute("SELECT * FROM temperature WHERE timestamp BETWEEN ? AND ?", (from_date_utc.format('YYYY-MM-DD HH:mm:ss'), to_date_utc.format('YYYY-MM-DD HH:mm:ss')))
+	temperature 	    = curs.fetchall()
+	curs.execute("SELECT * FROM humidity WHERE timestamp BETWEEN ? AND ?", (from_date_utc.format('YYYY-MM-DD HH:mm:ss'), to_date_utc.format('YYYY-MM-DD HH:mm:ss')))
+	humidity 		    = curs.fetchall()
+	curs.execute("SELECT * FROM pressure WHERE timestamp BETWEEN ? AND ?", (from_date_utc.format('YYYY-MM-DD HH:mm:ss'), to_date_utc.format('YYYY-MM-DD HH:mm:ss')))
+	pressure 		    = curs.fetchall()
 	conn.close()
 
-	return [temperatures, humidities, timezone, from_date_str, to_date_str]
+	return [temperature, humidity, timezone, from_date_str, to_date_str]
+
 
 @app.route("/to_plotly", methods=['GET'])  #This method will send the data to ploty.
 def to_plotly():
 	import plotly.plotly as py
 	from plotly.graph_objs import *
 
-	temperatures, humidities, timezone, from_date_str, to_date_str = get_records()
+	temperature, humidity, timezone, from_date_str, to_date_str = get_records()
 
 	# Create new record tables so that datetimes are adjusted back to the user browser's time zone.
 	time_series_adjusted_tempreratures  = []
-	time_series_adjusted_humidities 	= []
+	time_series_adjusted_humidity 	= []
 	time_series_temprerature_values 	= []
 	time_series_humidity_values 		= []
 
-	for record in temperatures:
-		local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm").to(timezone)
-		time_series_adjusted_tempreratures.append(local_timedate.format('YYYY-MM-DD HH:mm'))
+	for record in temperature:
+		local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm:ss").to(timezone)
+		time_series_adjusted_tempreratures.append(local_timedate.format('YYYY-MM-DD HH:mm:ss'))
 		time_series_temprerature_values.append(round(record[2],2))
 
-	for record in humidities:
-		local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm").to(timezone)
-		time_series_adjusted_humidities.append(local_timedate.format('YYYY-MM-DD HH:mm')) #Best to pass datetime in text
+	for record in humidity:
+		local_timedate = arrow.get(record[0], "YYYY-MM-DD HH:mm:ss").to(timezone)
+		time_series_adjusted_humidity.append(local_timedate.format('YYYY-MM-DD HH:mm:ss')) #Best to pass datetime in text
 																						  #so that Plotly respects it
 		time_series_humidity_values.append(round(record[2],2))
 
@@ -173,7 +186,7 @@ def to_plotly():
         		name='Temperature'
     				)
 	hum = Scatter(
-        		x=time_series_adjusted_humidities,
+        		x=time_series_adjusted_humidity,
         		y=time_series_humidity_values,
         		name='Humidity',
         		yaxis='y2'
